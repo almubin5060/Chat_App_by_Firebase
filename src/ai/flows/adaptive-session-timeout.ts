@@ -13,6 +13,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import {flow} from 'genkit/flow';
 
 const AdaptiveSessionTimeoutInputSchema = z.object({
   messageContent: z.string().describe('The content of the latest message in the chat session.'),
@@ -52,11 +53,12 @@ const adaptiveSessionTimeoutPrompt = ai.definePrompt({
   The new timeout should not be less than 60 seconds.`,
 });
 
-const adaptiveSessionTimeoutFlow = ai.defineFlow(
+const adaptiveSessionTimeoutFlow = flow(
   {
     name: 'adaptiveSessionTimeoutFlow',
     inputSchema: AdaptiveSessionTimeoutInputSchema,
     outputSchema: AdaptiveSessionTimeoutOutputSchema,
+    retries: 3,
   },
   async input => {
     const {output} = await adaptiveSessionTimeoutPrompt(input);
