@@ -12,8 +12,7 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
-import {flow} from 'genkit/flow';
+import {z, flow} from 'genkit';
 
 const AdaptiveSessionTimeoutInputSchema = z.object({
   messageContent: z.string().describe('The content of the latest message in the chat session.'),
