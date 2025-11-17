@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useActionState, useState } from 'react';
 import { ArrowRight, KeyRound, MessageSquarePlus, ShieldCheck } from 'lucide-react';
 import { joinChat } from '@/lib/actions';
 import { generateChatCode } from '@/lib/utils';
@@ -9,13 +9,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { useFormState } from 'react-dom';
 import { useToast } from '@/hooks/use-toast';
 
 export function HomePage() {
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
-  const [state, formAction] = useFormState(joinChat, undefined);
+  const [state, formAction] = useActionState(joinChat, undefined);
   const { toast } = useToast();
 
   const handleCreateChat = () => {
