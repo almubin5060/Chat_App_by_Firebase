@@ -12,7 +12,7 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z, flow} from 'genkit';
+import {z} from 'genkit';
 
 const AdaptiveSessionTimeoutInputSchema = z.object({
   messageContent: z.string().describe('The content of the latest message in the chat session.'),
@@ -52,7 +52,7 @@ const adaptiveSessionTimeoutPrompt = ai.definePrompt({
   The new timeout should not be less than 60 seconds.`,
 });
 
-const adaptiveSessionTimeoutFlow = flow(
+const adaptiveSessionTimeoutFlow = ai.defineFlow(
   {
     name: 'adaptiveSessionTimeoutFlow',
     inputSchema: AdaptiveSessionTimeoutInputSchema,
