@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 export function HomePage() {
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
-  const [state, formAction] = useActionState(joinChat, undefined);
+  const [state, formAction] = useActionState(joinChat, { error: null });
   const { toast } = useToast();
 
   const handleCreateChat = () => {

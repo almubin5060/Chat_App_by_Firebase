@@ -8,21 +8,21 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Bot, Copy, Send, ShieldCheck, Timer, User, XCircle } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useCollection } from '@/firebase';
+import { collection, addDoc, serverTimestamp, query, orderBy, Timestamp } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
 
 type Message = {
   id: string;
-  timestamp: number;
+  timestamp: Timestamp | number;
   text: string;
-  sender: 'user' | 'peer' | 'system';
+  sender: 'user' | 'peer' | 'system' | string;
 };
 
 const INITIAL_TIMEOUT_SECONDS = 300; // 5 minutes
 
 export function ChatPage({ chatId }: { chatId: string }) {
-  const [messages, setMessages] = useState<Message[]>([
-    { id: 'system-1', timestamp: Date.now(), text: `Session started. Code: ${chatId}. This chat is ephemeral and will expire after a period of inactivity.`, sender: 'system' }
-  ]);
   const [inputValue, setInputValue] = useState('');
   const [sessionActive, setSessionActive] = useState(true);
   const [timeoutSeconds, setTimeoutSeconds] = useState(INITIAL_TIMEOUT_SECONDS);
@@ -30,6 +30,35 @@ export function ChatPage({ chatId }: { chatId: string }) {
   const [isSending, setIsSending] = useState(false);
   const messageEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const firestore = useFirestore();
+
+  const [localSenderId] = useState(() => crypto.randomUUID());
+
+  const messagesRef = useMemo(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'chats', chatId, 'messages');
+  }, [firestore, chatId]);
+
+  const messagesQuery = useMemo(() => {
+    if (!messagesRef) return null;
+    return query(messagesRef, orderBy('timestamp', 'asc'));
+  }, [messagesRef]);
+
+  const { data: messages, loading, error } = useCollection<Message>(messagesQuery);
+  const [systemMessages, setSystemMessages] = useState<Message[]>([
+    { id: 'system-1', timestamp: Date.now(), text: `Session started. Code: ${chatId}. This chat is ephemeral and will expire after a period of inactivity.`, sender: 'system' }
+  ]);
+
+  const combinedMessages = useMemo(() => {
+    const remoteMessages = (messages || []).map(m => ({...m, sender: m.sender === localSenderId ? 'user' : 'peer'}));
+    const all = [...systemMessages, ...remoteMessages];
+    all.sort((a, b) => {
+        const tsA = a.timestamp instanceof Timestamp ? a.timestamp.toMillis() : a.timestamp;
+        const tsB = b.timestamp instanceof Timestamp ? b.timestamp.toMillis() : b.timestamp;
+        return tsA - tsB;
+    });
+    return all;
+  }, [messages, systemMessages, localSenderId]);
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(chatId);
@@ -43,7 +72,7 @@ export function ChatPage({ chatId }: { chatId: string }) {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  useEffect(scrollToBottom, [messages]);
+  useEffect(scrollToBottom, [combinedMessages]);
   
   const resetTimer = useCallback((newTimeout: number) => {
     setTimeoutSeconds(newTimeout);
@@ -58,7 +87,7 @@ export function ChatPage({ chatId }: { chatId: string }) {
         if (prev <= 1) {
           clearInterval(interval);
           setSessionActive(false);
-          setMessages(prevMsgs => [...prevMsgs, { id: crypto.randomUUID(), timestamp: Date.now(), text: 'Session expired due to inactivity.', sender: 'system' }]);
+          setSystemMessages(prevMsgs => [...prevMsgs, { id: crypto.randomUUID(), timestamp: Date.now(), text: 'Session expired due to inactivity.', sender: 'system' }]);
           return 0;
         }
         return prev - 1;
@@ -71,50 +100,47 @@ export function ChatPage({ chatId }: { chatId: string }) {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim() || !sessionActive || isSending) return;
+    if (!inputValue.trim() || !sessionActive || isSending || !messagesRef) return;
 
     setIsSending(true);
-    const userMessage: Message = { id: crypto.randomUUID(), timestamp: Date.now(), text: inputValue, sender: 'user' };
-    
-    setMessages(prev => [...prev, userMessage]);
+    const userMessageText = inputValue;
     setInputValue('');
     
     resetTimer(timeoutSeconds);
 
-    setTimeout(() => {
-        const peerMessage: Message = { id: crypto.randomUUID(), timestamp: Date.now(), text: 'Message received.', sender: 'peer' };
-        setMessages(prev => [...prev, peerMessage]);
-    }, 1000);
-    
     try {
-      const userActivityLevel = messages.filter(m => m.sender === 'user' && (Date.now() - m.timestamp < 60000)).length + 1;
-      
-      const input: AdaptiveSessionTimeoutInput = {
-        messageContent: userMessage.text,
-        userActivityLevel: userActivityLevel,
-        currentTimeout: timeoutSeconds,
-      };
-      
-      const result: AdaptiveSessionTimeoutOutput = await adaptiveSessionTimeout(input);
-      
-      resetTimer(result.newTimeout);
-      const systemMessage: Message = { 
-        id: crypto.randomUUID(), 
-        timestamp: Date.now(),
-        text: `AI Advisor: ${result.reason}`, 
-        sender: 'system' 
-      };
-      setMessages(prev => [...prev, systemMessage]);
+        await addDoc(messagesRef, {
+            text: userMessageText,
+            sender: localSenderId,
+            timestamp: serverTimestamp()
+        });
+
+        const userActivityLevel = (messages || []).filter(m => m.sender === localSenderId && (Date.now() - (m.timestamp as Timestamp).toMillis() < 60000)).length + 1;
+        
+        const input: AdaptiveSessionTimeoutInput = {
+            messageContent: userMessageText,
+            userActivityLevel: userActivityLevel,
+            currentTimeout: timeoutSeconds,
+        };
+        
+        const result: AdaptiveSessionTimeoutOutput = await adaptiveSessionTimeout(input);
+        
+        resetTimer(result.newTimeout);
+        setSystemMessages(prev => [...prev, { 
+            id: crypto.randomUUID(), 
+            timestamp: Date.now(),
+            text: `AI Advisor: ${result.reason}`, 
+            sender: 'system' 
+        }]);
 
     } catch (error) {
-      console.error("AI timeout adjustment failed:", error);
-      const systemMessage: Message = { 
-        id: crypto.randomUUID(), 
-        timestamp: Date.now(),
-        text: `Could not reach AI advisor. Session timeout remains unchanged.`, 
-        sender: 'system' 
-      };
-      setMessages(prev => [...prev, systemMessage]);
+        console.error("Failed to send message or adjust timeout:", error);
+        setSystemMessages(prev => [...prev, { 
+            id: crypto.randomUUID(), 
+            timestamp: Date.now(),
+            text: `Could not send message or reach AI advisor. Session timeout remains unchanged.`, 
+            sender: 'system' 
+        }]);
     } finally {
         setIsSending(false);
         setTimeout(scrollToBottom, 150); 
@@ -141,9 +167,11 @@ export function ChatPage({ chatId }: { chatId: string }) {
       </header>
 
       <main className="flex-1 overflow-y-auto p-4 space-y-6">
-        {messages.map((msg) => (
+        {loading && <div className="text-center text-muted-foreground">Loading chat...</div>}
+        {error && <div className="text-center text-destructive">Error loading messages: {error.message}</div>}
+        {combinedMessages.map((msg, index) => (
           <div
-            key={msg.id}
+            key={msg.id || index}
             className={cn(
               "flex items-end gap-3 max-w-xl animate-in fade-in-20 slide-in-from-bottom-4 duration-500",
               msg.sender === 'user' && 'ml-auto flex-row-reverse',

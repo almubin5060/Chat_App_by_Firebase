@@ -1,0 +1,35 @@
+{
+  "entities": {
+    "Message": {
+      "title": "Message",
+      "description": "A chat message.",
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "The content of the message."
+        },
+        "sender": {
+          "type": "string",
+          "description": "A unique identifier for the sender."
+        },
+        "timestamp": {
+          "type": "object",
+          "description": "The server-side timestamp of when the message was created."
+        }
+      },
+      "required": ["text", "sender", "timestamp"]
+    }
+  },
+  "auth": {
+    "providers": []
+  },
+  "firestore": {
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": {
+        "$ref": "#/backend/entities/Message"
+      },
+      "description": "Stores messages for a specific chat session."
+    }
+  }
+}

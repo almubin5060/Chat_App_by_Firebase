@@ -1,0 +1,9 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /chats/{chatId}/messages/{messageId} {
+      allow read, write: if true; // In a real app, you would restrict this to authenticated users in the chat.
+    }
+  }
+}
