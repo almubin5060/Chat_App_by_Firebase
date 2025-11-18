@@ -84,7 +84,7 @@ export function HomePage() {
           </form>
         </CardContent>
       </Card>
-      <footer className="absolute bottom-4 text-center text-xs text-muted-foreground z-10">
+      <footer className="absolute bottom-4 text-center text-xs text-muted-foreground z-10" suppressHydrationWarning>
         <p>&copy; {new Date().getFullYear()} ShadowSpeak. All rights dissolved after session expiry.</p>
       </footer>
     </main>
