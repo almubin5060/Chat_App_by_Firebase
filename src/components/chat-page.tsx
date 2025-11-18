@@ -32,7 +32,11 @@ export function ChatPage({ chatId }: { chatId: string }) {
   const { toast } = useToast();
   const firestore = useFirestore();
 
-  const [localSenderId] = useState(() => crypto.randomUUID());
+  const [localSenderId, setLocalSenderId] = useState('');
+
+  useEffect(() => {
+    setLocalSenderId(crypto.randomUUID());
+  }, []);
 
   const messagesRef = useMemo(() => {
     if (!firestore) return null;
@@ -100,7 +104,7 @@ export function ChatPage({ chatId }: { chatId: string }) {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim() || !sessionActive || isSending || !messagesRef) return;
+    if (!inputValue.trim() || !sessionActive || isSending || !messagesRef || !localSenderId) return;
 
     setIsSending(true);
     const userMessageText = inputValue;
